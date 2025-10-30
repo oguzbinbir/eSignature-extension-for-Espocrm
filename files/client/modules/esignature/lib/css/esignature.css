@@ -1,8 +1,15 @@
 canvas {
     border: 1px dotted #000;
     cursor: pointer;
+ 
+}
+.jSignature {
+    background-color: #fff !important;
 }
 
+.eSignature input {
+    color: black;
+}
 @media print {
   #documentBackButton, #documentPrintButton {
     display: none;
@@ -17,7 +24,18 @@ canvas {
     width: 101%;
     /* height: auto; */
     border: 1px solid black;
+    background-color: #d3d3d3;
 }
+
+.jSignSignedOnLabel {
+  color: black; 
+}
+
+/* Detailansicht: Feld-Container hat data-name="<feldname>" */
+.record .field[data-name="unterschrift"] {
+  background: #fff !important;     /* immer weiß (gut für Dark Theme) */
+}
+
 
 .signatureField {font-weight:bold;font-style:italic;font-family:'Comic Sans MS', cursive, sans-serif}
 
