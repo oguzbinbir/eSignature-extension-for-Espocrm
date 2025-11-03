@@ -274,6 +274,65 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                         return $('<div/>', { class: 'jsign-signhere-badge', text: label });
                     }.bind(this) }
                 });
+            
+                let hasLocked = false;
+                const lockedNames = new Set();
+                const hadSavedValueAtStart = !!this.model.get(this.name);
+
+                function getRecordViewWithGetFieldView(ctx) {
+                let v = ctx, i = 0;
+                while (v && i < 12) {
+                    v = (v.getParentView && v.getParentView()) || null;
+                    if (v && typeof v.getFieldView === 'function') return v;
+                    i++;
+                }
+                return null;
+                }
+                //------
+
+                function toggleInputsDisabled(ctx, disabled) {
+                    const $form = ctx.$el.closest('.record, .edit, .detail, form');
+                    if (!$form.length) return;
+
+                    $form.find('input, select, textarea, button').each(function () {
+                        const $el = $(this);
+
+                        // - Signaturfeld selbst
+                        // - Action-Buttons (z. B. Speichern/Abbrechen)
+                        if ($el.closest(ctx.$el).length) return;
+                        if ($el.hasClass('action')) return;
+
+                        if (disabled) {
+                            $el.attr('disabled', 'disabled');
+                        } else {
+                            $el.removeAttr('disabled');
+                        }
+                    });
+                }
+
+                // ------------------------------
+                // Reagiere auf Signaturänderungen
+                // ------------------------------
+                let locked = false;
+                const hadSavedValue = !!this.model.get(this.name);
+
+                $host.on('change', function () {
+                    this.trigger('change'); // hält Model in Sync
+
+                    const strokes = (typeof $host.jSignature === 'function')
+                        ? ($host.jSignature('getData', 'native') || [])
+                        : [];
+
+                    if (!locked && strokes.length > 0 && !hadSavedValue) {
+                        toggleInputsDisabled(this, true);
+                        locked = true;
+                    }
+
+                    if (locked && strokes.length === 0 && !hadSavedValue) {
+                        toggleInputsDisabled(this, false);
+                        locked = false;
+                    }
+                }.bind(this));
             }
         },
 
@@ -351,7 +410,7 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                     var imgData = this.$el.jSignature('getData'); // data URI
                     var ts = eSignatureISODateString(new Date());
                     var label = this.translate('electronicallySignedOn', 'messages', 'Global');
-                    current = '<img src="' + imgData + '"/>' +
+                    current = '<img class="eSignature-img" src="' + imgData + '"/>' +
                             '<div style="margin-top:-0.5em;font-size:1em;font-style:italic;">' +
                             label + ' ' + ts +
                             '</div>';
