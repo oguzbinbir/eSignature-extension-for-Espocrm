@@ -37,6 +37,10 @@ canvas {
 }
 
 
+.eSignature-img {
+  width: 100%;
+}
+
 .signatureField {font-weight:bold;font-style:italic;font-family:'Comic Sans MS', cursive, sans-serif}
 
 body .printHTML {font-family:Helvetica, Arial, Verdana, sans-serif; font-size:11pt; color:#000000; margin: 0em 0em 0em 0em; }
