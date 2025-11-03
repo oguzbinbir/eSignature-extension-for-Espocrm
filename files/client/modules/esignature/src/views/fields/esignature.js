@@ -32,6 +32,9 @@ Copyright (c) 2010 Brinley Ang http://www.unbolt.net
 MIT License <http://www.opensource.org/licenses/mit-license.php>
 */
 
+console.log('[DEBUG eSignature] loaded module esignature:views/fields/esignature');
+
+
 Espo.define('esignature:views/fields/esignature', 'views/fields/base', function (Dep) {
 
     return Dep.extend({
@@ -46,6 +49,7 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
         
         // custom methods        
         init: function () { // overrides "init" function from base.js
+            console.log("init:");
             if (this.events) {
                 this.events = _.clone(this.events);
             } else {
@@ -64,16 +68,23 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                     }
                 }
             }, this);
-            var additionaParamList = ['inlineEditDisabled'];
-            additionaParamList.forEach(function (item) {
+            var additionalParamList = ['inlineEditDisabled','required'];
+            additionalParamList.forEach(function (item) {
                 this.params[item] = this.model.getFieldParam(this.name, item) || null;
             }, this);
             this.mode = this.options.mode || this.mode;
+            console.log("Debug 1");
+            console.log(this.mode);
+            if (this.isDetailMode && this.isDetailMode()) {
+                this.template = this.detailTemplate;
+            }
+            this.template = this.getTemplate();
+            console.log(this.template);
             this.tooltip = this.options.tooltip || this.params.tooltip || this.model.getFieldParam(this.name, 'tooltip');
             this.disabledLocked = this.options.disabledLocked || false;
             this.disabled = this.disabledLocked || this.options.disabled || this.disabled;
             // signature fields can only be seen in detail mode
-            this.setMode('detail');
+            //this.setMode('detail');
             this.on('invalid', function () {
                 var $cell = this.getCellElement();
                 $cell.addClass('has-error');
@@ -87,8 +98,36 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
             if ((this.isDetailMode() || this.isEditMode()) && this.tooltip) {
                 this.initTooltip();
             }
-            // signature fields can only be edited inline
-            this.listenToOnce(this, 'after:render', this.initInlineEsignatureEdit, this);            
+            // Nur im Detail-Modus Inline-Edit (Stift) aktivieren:
+            if (this.isDetailMode && this.isDetailMode()) {
+                this.listenToOnce(this, 'after:render', this.initInlineEsignatureEdit, this);
+            }
+
+            // Nur im Edit-/Create-Modus den Canvas direkt initialisieren:
+            if (this.isEditMode && this.isEditMode()) {
+                this.listenToOnce(this, 'after:render', this.initSignatureInEdit, this);
+            }  
+
+            this.listenTo(this, 'after:render', function () {
+                var isRequired =
+                    this.model.getFieldParam(this.name, 'required') ||
+                    this.params.required === true;
+
+                var $cell = this.getCellElement && this.getCellElement();
+                if (!$cell) return;
+
+                // Label-Text finden (Struktur: <label> <span class="label-text">…</span> …)
+                var $labelText = $cell.find('label .label-text');
+                if (!$labelText.length) return;
+
+                // Erst entfernen, dann ggf. neu anhängen (verhindert Duplikate nach Re-Render)
+                $labelText.find('.required-sign').remove();
+
+                if (isRequired) {
+                    $labelText.append(' <span class="required-sign"> *</span>');
+                }
+            }, this);
+     
             this.attributeList = this.getAttributeList();
             this.listenTo(this.model, 'change', function (model, options) {
                 if (this.isRendered() || this.isBeingRendered()) {
@@ -111,8 +150,18 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 this.model.set(attributes, {ui: true});
             });
         },
+
+        getTemplate: function () {
+            console.log("Get template aufgerufen");
+            if (this.isListMode() && this.listTemplate) return this.listTemplate;
+            if (this.isEditMode() && this.editTemplate) return this.editTemplate;
+            return this.detailTemplate;
+        },
+
+
         
         data: function () { // overrides "data" function from base.js
+            console.log("data:");
             var imageSource = this.getValueForDisplay();
             var data = {
                 scope: this.model.name,
@@ -123,25 +172,33 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 imageSource: imageSource                
             };   
             // signature fields can not be edited manually, force detail mode
-            if(this.mode !== "detail") {
+            /*if(this.mode !== "detail") {
                 this.setMode("detail");
-            }
+            }*/
+            console.log("Debug 2");
+            console.log(this.mode);
             return data;
         },
 
         initInlineEsignatureEdit: function () { // custom function equivalent to "initInlineEdit" at base.js   
+            console.log("initInlineEsignatureEdit:");
             var $cell = this.getCellElement();
             var $editLink = $(
                 '<button type="button" class="pull-right inline-edit-link hidden" aria-label="Edit" style="background-color:unset;border:unset;">' +
                     '<span class="fas fa-pencil-alt fa-sm"></span>' +
                 '</button>'
                 );
+            console.log($cell.length);
+            console.log(this.model.get(this.name));
             if ($cell.length === 0 || typeof(this.model.get(this.name))=== 'undefined') {
+                console.log("erneute prüfung");
                 this.listenToOnce(this, 'after:render', this.initInlineEsignatureEdit, this);
                 return;
             }
             // if the signature field already has a value do not add the inline edit link and set the field as readonly
+            console.log(this.model.get(this.name));
             if(this.model.get(this.name)) {
+                console.log("readonly");
                 this.readOnly = true;
                 return;                
             }
@@ -170,7 +227,8 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
             }.bind(this));
         },
 
-        inlineEsignatureEdit: function() { // custom function equivalent to "inlineEdit" at base.js     
+        inlineEsignatureEdit: function() { // custom function equivalent to "inlineEdit" at base.js    
+            console.log("inlineEsignatureEdit:"); 
             this._isInlineEditMode = true;       
             // add css class esignature to the field element
             this.$el.addClass('eSignature');
@@ -196,8 +254,92 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
             // add the inline action links ("Update" and "Cancel")
             this.addInlineEditLinks(); // function inherited from base.js               
         },
+
+        initSignatureInEdit: function () {
+            var raw = this.model.get(this.name);
+            var hasValue = raw !== null && raw !== undefined && raw !== '';
+            if (hasValue) {
+                this.readOnly = true;
+                return;
+            }
+
+            var $host = this.$el.addClass('eSignature');
+
+            if (typeof $host.jSignature === 'function') {
+                $host.jSignature({
+                    UndoButton: true,
+                    color: 'rgb(5, 1, 135)',
+                    SignHere: { renderer: function () {
+                        const label = this.translate('signHere', 'messages', 'Global');
+                        return $('<div/>', { class: 'jsign-signhere-badge', text: label });
+                    }.bind(this) }
+                });
+            
+                let hasLocked = false;
+                const lockedNames = new Set();
+                const hadSavedValueAtStart = !!this.model.get(this.name);
+
+                function getRecordViewWithGetFieldView(ctx) {
+                let v = ctx, i = 0;
+                while (v && i < 12) {
+                    v = (v.getParentView && v.getParentView()) || null;
+                    if (v && typeof v.getFieldView === 'function') return v;
+                    i++;
+                }
+                return null;
+                }
+                //------
+
+                function toggleInputsDisabled(ctx, disabled) {
+                    const $form = ctx.$el.closest('.record, .edit, .detail, form');
+                    if (!$form.length) return;
+
+                    $form.find('input, select, textarea, button').each(function () {
+                        const $el = $(this);
+
+                        // - Signaturfeld selbst
+                        // - Action-Buttons (z. B. Speichern/Abbrechen)
+                        if ($el.closest(ctx.$el).length) return;
+                        if ($el.hasClass('action')) return;
+
+                        if (disabled) {
+                            $el.attr('disabled', 'disabled');
+                        } else {
+                            $el.removeAttr('disabled');
+                        }
+                    });
+                }
+
+                // ------------------------------
+                // Reagiere auf Signaturänderungen
+                // ------------------------------
+                let locked = false;
+                const hadSavedValue = !!this.model.get(this.name);
+
+                $host.on('change', function () {
+                    this.trigger('change'); // hält Model in Sync
+
+                    const strokes = (typeof $host.jSignature === 'function')
+                        ? ($host.jSignature('getData', 'native') || [])
+                        : [];
+
+                    if (!locked && strokes.length > 0 && !hadSavedValue) {
+                        toggleInputsDisabled(this, true);
+                        locked = true;
+                    }
+
+                    if (locked && strokes.length === 0 && !hadSavedValue) {
+                        toggleInputsDisabled(this, false);
+                        locked = false;
+                    }
+                }.bind(this));
+            }
+        },
+
+
         
         inlineEditClose: function () { // substitutes same function at base.js
+            console.log("inlineEditClose:");
             this.trigger('inline-edit-off');
             this._isInlineEditMode = false;
             this.once('after:render', function () {
@@ -209,6 +351,7 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
         },
         
         inlineEditSave: function () { // substitutes same function at base.js   
+            console.log("inlineEditSave:");
             // compare the amount of strokes to make sure there's a signature to be saved
             const strokes = this.$el.jSignature('getData', 'native');
             if (!strokes.length) {
@@ -253,7 +396,64 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
             // set field as readonly
             this.readOnly = true;
             this.inlineEditClose();
+        },
+        fetch: function () {
+            console.log("fetch:");
+            var out = {};
+            // Standard: bestehenden Wert behalten
+            var current = this.model.get(this.name) || null;
+
+            if (this.isEditMode && this.isEditMode() && typeof this.$el.jSignature === 'function') {
+                // Hat der Nutzer gezeichnet?
+                var strokes = this.$el.jSignature('getData', 'native') || [];
+                if (strokes.length) {
+                    var imgData = this.$el.jSignature('getData'); // data URI
+                    var ts = eSignatureISODateString(new Date());
+                    var label = this.translate('electronicallySignedOn', 'messages', 'Global');
+                    current = '<img class="eSignature-img" src="' + imgData + '"/>' +
+                            '<div style="margin-top:-0.5em;font-size:1em;font-style:italic;">' +
+                            label + ' ' + ts +
+                            '</div>';
+                }
+                // sonst: nichts gezeichnet -> bisherigen Wert nicht löschen
+            }
+
+            out[this.name] = current;
+            return out;
+        },
+
+        validate: function () {
+            // required-Flag wie gehabt lesen
+            var isRequired =
+                this.model.getFieldParam(this.name, 'required') ||
+                this.params.required === true;
+
+            if (!isRequired) return false;
+
+            var hasSavedValue = !!this.model.get(this.name);
+            var hasStrokes = false;
+
+            if (this.isEditMode && this.isEditMode() && typeof this.$el.jSignature === 'function') {
+                var strokes = this.$el.jSignature('getData', 'native') || [];
+                hasStrokes = strokes.length > 0;
+            }
+
+            if (!hasSavedValue && !hasStrokes) {
+                var label =
+                (this.getLanguage && this.getLanguage().translate(this.name, 'fields', this.model.name)) ||
+                this.params.label || this.name;
+
+                var msg = (this.getLanguage && this.getLanguage().translate('fieldIsRequired', 'messages', 'Global')) ||
+                        '{field} wird benötigt';
+                msg = msg.replace(/\{field\}/g, label);
+
+                this.showValidationMessage(msg);
+                return true; // blockiert Speichern
+            }
+            return false;
         }
-         
+
+
+
     });
 });

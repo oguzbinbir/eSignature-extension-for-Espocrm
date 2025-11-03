@@ -1,5 +1,6 @@
 {
    "params":[
+      { "name": "required", "type": "bool", "default": false, "view": "views/fields/bool", "label": "Required" }
    ],
    "notCreatable": false,
    "filter": false,
