@@ -365,7 +365,7 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
             // prepare the signature drawing to be stored in the database integrating the timestamp
             var translatedLabel = this.translate('electronicallySignedOn', 'messages', 'Global');
             var imageSource = '<img class="eSignature-img" src="' + this.$el.jSignature('getData') + '"/>' +
-                            '<div style="margin-top:-0.5em;margin-left:0.5em;font-size:1em;font-style:italic;">' +
+                            '<div style="color:black;margin-top:-0.5em;margin-left:0.5em;font-size:1em;font-style:italic;">' +
                             translatedLabel + ' ' + timestamp +
                             '</div>';
 
@@ -411,7 +411,7 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                     var ts = eSignatureISODateString(new Date());
                     var label = this.translate('electronicallySignedOn', 'messages', 'Global');
                     current = '<img class="eSignature-img" src="' + imgData + '"/>' +
-                            '<div style="margin-top:-0.5em;font-size:1em;font-style:italic;">' +
+                            '<div style="color:black;margin-top:-0.5em;margin-left:0.5em;font-size:1em;font-style:italic;">' +
                             label + ' ' + ts +
                             '</div>';
                 }
