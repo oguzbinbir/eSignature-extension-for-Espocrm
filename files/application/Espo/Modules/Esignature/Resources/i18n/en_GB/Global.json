@@ -2,6 +2,8 @@
   "messages": {
     "electronicallySignedOn": "Electronically signed on",
     "signHere": "Sign here",
-    "noSignatureEntered": "No signature was entered"
+    "noSignatureEntered": "No signature was entered",
+    "sign": "Sign",
+    "clear": "Clear"
   }
 }

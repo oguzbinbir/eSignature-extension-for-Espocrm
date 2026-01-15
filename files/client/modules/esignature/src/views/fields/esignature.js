@@ -43,14 +43,18 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
 
         // custom properties
         blankCanvassCode: '',
-        
+        events: {
+            'click [data-action="openSignature"]': function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openEsignatureModal();
+            }
+        },
+
         // custom methods        
         init: function () { // overrides "init" function from base.js
-            if (this.events) {
-                this.events = _.clone(this.events);
-            } else {
-                this.events = {};
-            }
+            this.events = _.extend({}, this.events || {});
+
             this.defs = this.options.defs || {};
             this.name = this.options.name || this.defs.name;
             this.params = this.options.params || this.defs.params || {};
@@ -64,16 +68,17 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                     }
                 }
             }, this);
-            var additionaParamList = ['inlineEditDisabled'];
+            var additionaParamList = ['inlineEditDisabled','required'];
             additionaParamList.forEach(function (item) {
                 this.params[item] = this.model.getFieldParam(this.name, item) || null;
             }, this);
             this.mode = this.options.mode || this.mode;
+            this.template = this.getTemplate();
+            console.log('eSignature field mode:', this.mode, 'editTemplate:', this.editTemplate, 'detailTemplate:', this.detailTemplate);
             this.tooltip = this.options.tooltip || this.params.tooltip || this.model.getFieldParam(this.name, 'tooltip');
             this.disabledLocked = this.options.disabledLocked || false;
             this.disabled = this.disabledLocked || this.options.disabled || this.disabled;
-            // signature fields can only be seen in detail mode
-            this.setMode('detail');
+
             this.on('invalid', function () {
                 var $cell = this.getCellElement();
                 $cell.addClass('has-error');
@@ -88,7 +93,28 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 this.initTooltip();
             }
             // signature fields can only be edited inline
-            this.listenToOnce(this, 'after:render', this.initInlineEsignatureEdit, this);            
+            //this.listenToOnce(this, 'after:render', this.initInlineEsignatureEdit, this);     
+             this.listenTo(this, 'after:render', function () {
+                var isRequired =
+                    this.model.getFieldParam(this.name, 'required') ||
+                    this.params.required === true;
+
+                var $cell = this.getCellElement && this.getCellElement();
+                if (!$cell) return;
+
+                // Label-Text finden (Struktur: <label> <span class="label-text">…</span> …)
+                var $labelText = $cell.find('label .label-text');
+                if (!$labelText.length) return;
+
+                // Erst entfernen, dann ggf. neu anhängen (verhindert Duplikate nach Re-Render)
+                $labelText.find('.required-sign').remove();
+
+                if (isRequired) {
+                    $labelText.append(' <span class="required-sign"> *</span>');
+                }
+            }, this);
+
+       
             this.attributeList = this.getAttributeList();
             this.listenTo(this.model, 'change', function (model, options) {
                 if (this.isRendered() || this.isBeingRendered()) {
@@ -122,138 +148,73 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 value: this.getValueForDisplay(),
                 imageSource: imageSource                
             };   
-            // signature fields can not be edited manually, force detail mode
-            if(this.mode !== "detail") {
-                this.setMode("detail");
-            }
             return data;
         },
+        getTemplate: function () {
+            if (this.isListMode && this.isListMode() && this.listTemplate) return this.listTemplate;
+            if (this.isEditMode && this.isEditMode() && this.editTemplate) return this.editTemplate;
+            return this.detailTemplate;
+        },
 
-        initInlineEsignatureEdit: function () { // custom function equivalent to "initInlineEdit" at base.js   
-            var $cell = this.getCellElement();
-            var $editLink = $(
-                '<button type="button" class="pull-right inline-edit-link hidden" aria-label="Edit" style="background-color:unset;border:unset;">' +
-                    '<span class="fas fa-pencil-alt fa-sm"></span>' +
-                '</button>'
-                );
-            if ($cell.length === 0 || typeof(this.model.get(this.name))=== 'undefined') {
-                this.listenToOnce(this, 'after:render', this.initInlineEsignatureEdit, this);
+        
+        openEsignatureModal: function () {
+            if (this.disabled) return;
+
+            // Wenn schon offen: nicht doppelt
+            if (this._esignatureView && !this._esignatureView.isRemoved) {
                 return;
             }
-            // if the signature field already has a value do not add the inline edit link and set the field as readonly
-            if(this.model.get(this.name)) {
-                this.readOnly = true;
-                return;                
-            }
-            // after the element has been rendered, add the hidden pencil icon link
-            $cell.prepend($editLink);
-            $editLink.on('click', function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                // when clicked, call the custom signature field inline edit function
-                this.inlineEsignatureEdit(); 
-            // bind the functionality to the pencil icon link    
-            }.bind(this));
-            $cell.on('mouseenter', function (e) {
-                e.stopPropagation();
-                if (this.disabled || this.readOnly || this._isInlineEditMode) {
+
+            this.createView('esignatureModal', 'esignature:views/modals/esignature', {
+                model: this.model,
+                fieldName: this.name
+            }, function (view) {
+
+                this._esignatureView = view;
+
+                // commit => feld setzen + gesamtes formular speichern
+                this.listenToOnce(view, 'esignature:commit', function (imageSource, done) {
+                    this.model.set(this.name, imageSource);
+
+                    const recordView = this.findRecordEditView_();
+                    if (!recordView || typeof recordView.actionSave !== 'function') {
+                        done && done(false, 'Konnte Record-Edit-View nicht finden.');
                         return;
-                }
-                if (this.mode === 'detail') {
-                    $editLink.removeClass('hidden');
-                }
-            }.bind(this)).on('mouseleave', function (e) {
-                e.stopPropagation();
-                if (this.mode === 'detail') {
-                    $editLink.addClass('hidden');
-                }
+                    }
+
+                    const result = recordView.actionSave();
+
+                    if (result && typeof result.then === 'function') {
+                        result.then(() => done && done(true))
+                            .catch(() => done && done(false, 'Speichern fehlgeschlagen.'));
+                    } else {
+                        done && done(true);
+                    }
+                }, this);
+
+                // WICHTIG: nur rendern
+                view.render();
+
             }.bind(this));
         },
 
-        inlineEsignatureEdit: function() { // custom function equivalent to "inlineEdit" at base.js     
-            this._isInlineEditMode = true;       
-            // add css class esignature to the field element
-            this.$el.addClass('eSignature');
-            // initialize jSignature plug-in to display canvas input
-            var $sigDiv = this.$el.jSignature({
-                UndoButton: true,
-                color: 'rgb(5, 1, 135)',
-                SignHere: {
-                    renderer: function () {
-                    // eigenes Hinweis-Element zurückgeben
-                    const label = this.translate('signHere', 'messages', 'Global');
 
-                    const $badge = $('<div/>', {
-                        class: 'jsign-signhere-badge',
-                        text: label
-                        });
-                    return $badge;
-                    }.bind(this) // bind, damit this.translate() funktioniert
+        findRecordEditView_: function () {
+            // Wir laufen die Parent-Views hoch, bis wir eine View mit actionSave finden.
+            let v = this.getParentView && this.getParentView();
+            let guard = 0;
+
+            while (v && guard < 10) {
+                if (typeof v.actionSave === 'function') {
+                    return v;
                 }
-                });
-            // get the blank canvass code value to compare against a filled canvas
-            this.blankCanvassCode = $sigDiv.jSignature('getData');
-            // add the inline action links ("Update" and "Cancel")
-            this.addInlineEditLinks(); // function inherited from base.js               
-        },
-        
-        inlineEditClose: function () { // substitutes same function at base.js
-            this.trigger('inline-edit-off');
-            this._isInlineEditMode = false;
-            this.once('after:render', function () {
-                // remove the inline edit links
-                this.removeInlineEditLinks(); // function inherited from base.js
-            }, this);
-            // re-renders the entity in detail mode
-            this.reRender(true);
-        },
-        
-        inlineEditSave: function () { // substitutes same function at base.js   
-            // compare the amount of strokes to make sure there's a signature to be saved
-            const strokes = this.$el.jSignature('getData', 'native');
-            if (!strokes.length) {
-                alert(this.translate('noSignatureEntered', 'messages', 'Global'));
-                return;
+                v = v.getParentView && v.getParentView();
+                guard++;
             }
+            return null;
+        },
 
-            // register the signature time stamp
-            var d = new Date();
-            var timestamp = eSignatureISODateString(d);             
-            // prepare the signature drawing to be stored in the database integrating the timestamp
-            var translatedLabel = this.translate('electronicallySignedOn', 'messages', 'Global');
-            var imageSource = '<img class="eSignature-img" src="' + this.$el.jSignature('getData') + '"/>' +
-                            '<div style="color:black;margin-top:-0.5em;margin-left:0.5em;font-size:1em;font-style:italic;">' +
-                            translatedLabel + ' ' + timestamp +
-                            '</div>';
 
-            this.notify('Saving...');
-            var self = this;
-            var model = this.model;
-            var prev = this.initialAttributes;
-            var data = model.attributes;
-            // store the image code as the field value
-            data[this.name] = imageSource;
-            // persist the model with the updated field value
-            this.model.save(data, {
-                success: function () {
-                    self.trigger('after:save');
-                    model.trigger('after:save');
-                    self.notify('Saved', 'success');
-                },
-                error: function () {
-                    alert("Error in saving to DB");
-                    self.notify('Error occured', 'error');
-                    // undo all field value changes
-                    model.set(prev, {silent: true});
-                    // re-render with the original values
-                    self.render();
-                },
-                patch: true
-            });
-            // set field as readonly
-            this.readOnly = true;
-            this.inlineEditClose();
-        }
          
     });
 });

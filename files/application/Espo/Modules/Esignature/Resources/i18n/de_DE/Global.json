@@ -2,6 +2,8 @@
   "messages": {
     "electronicallySignedOn": "Elektronisch unterschrieben am",
     "signHere": "Hier unterschreiben",
-    "noSignatureEntered": "Sie haben nicht unterschrieben"
+    "noSignatureEntered": "Sie haben nicht unterschrieben",
+    "sign": "Unterschreiben",
+    "clear": "Löschen"
   }
 }
