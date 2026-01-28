@@ -90,7 +90,6 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 this.initTooltip();
             }
 
-
             this.listenTo(this, 'after:render', function () {
                 var isRequired =
                     this.model.getFieldParam(this.name, 'required') ||
@@ -136,6 +135,13 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
 
         data: function () {
             var signatureData = this.getSignatureData();
+            var hasSignature = false;
+
+            if (signatureData) {
+                // Legacy oder neue Strokes
+                hasSignature = signatureData.isLegacy || 
+                              (signatureData.strokes && signatureData.strokes.length > 0);
+            }
 
             return {
                 scope: this.model.name,
@@ -143,7 +149,7 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 defs: this.defs,
                 params: this.params,
                 value: this.model.get(this.name),
-                hasSignature: signatureData && signatureData.strokes && signatureData.strokes.length > 0,
+                hasSignature: hasSignature,
                 signatureData: signatureData
             };
         },
@@ -156,28 +162,64 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
 
         /**
          * Parst die gespeicherten Signature-Daten (JSON-String -> Objekt)
+         * Abwärtskompatibel: Erkennt auch alte Image-Formate
          */
         getSignatureData: function () {
             var raw = this.model.get(this.name);
             if (!raw) return null;
 
+            // Prüfe ob es alte Image-Daten sind (HTML mit <img>)
+            if (typeof raw === 'string' && raw.indexOf('<img') !== -1) {
+                return {
+                    isLegacy: true,
+                    html: raw
+                };
+            }
+
+            // Neue Stroke-Daten (JSON)
             try {
-                return typeof raw === 'string' ? JSON.parse(raw) : raw;
+                var parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+                if (parsed && parsed.strokes) {
+                    return {
+                        isLegacy: false,
+                        ...parsed
+                    };
+                }
             } catch (e) {
                 console.error('Error parsing signature data:', e);
-                return null;
             }
+
+            return null;
         },
 
         /**
-         * Rendert die Signatur-Preview aus Stroke-Daten
+         * Rendert die Signatur-Preview aus Stroke-Daten ODER Legacy-HTML
          */
         afterRender: function () {
             Dep.prototype.afterRender.call(this);
 
             var signatureData = this.getSignatureData();
-            if (signatureData && signatureData.strokes) {
+            if (!signatureData) return;
+
+            // Legacy-Format: HTML direkt anzeigen
+            if (signatureData.isLegacy) {
+                this.renderLegacySignature(signatureData.html);
+                return;
+            }
+
+            // Neues Format: Canvas mit Strokes
+            if (signatureData.strokes) {
                 this.renderSignaturePreview(signatureData);
+            }
+        },
+
+        /**
+         * Zeigt alte Image-Signaturen an
+         */
+        renderLegacySignature: function (html) {
+            var $container = this.$el.find('.esignature-preview');
+            if ($container.length) {
+                $container.html(html);
             }
         },
 
@@ -269,12 +311,10 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                         // Unterschrift als JSON-String setzen
                         this.model.set(this.name, JSON.stringify(signatureData));
                         
-                        
-                        // Modal schließen und "done" callback aufrufen
+                        // Modal schließen
                         done && done(true);
-                        
-                        // Alle anderen Felder auf readonly setzen
                         this.lockOtherFields_(this);
+                        
                     }, this);
                 },
                 this
