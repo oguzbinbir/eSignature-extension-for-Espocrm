@@ -1,16 +1,27 @@
 {
-   "params":[
-      { "name": "required", "type": "bool", "default": false, "view": "views/fields/bool", "label": "Required" }
+   "params": [
+      {
+         "name": "required",
+         "type": "bool",
+         "default": false,
+         "view": "views/fields/bool",
+         "label": "Required"
+      }
    ],
    "notCreatable": false,
    "filter": false,
-   "fieldDefs":{
-      "type":"text",
-      "notStorable":false  
+   "fieldDefs": {
+      "type": "text",
+      "notStorable": false,
+      "dbType": "text"
    },
    "view": "esignature:views/fields/esignature",
    "textFilter": false,
-   "filter": false,
-   "fullTextSearch": false,    
-   "readOnly": false
+   "fullTextSearch": false,
+   "readOnly": false,
+   "translatedOptions": false,
+   "validationList": [
+      "required",
+      "valid"
+   ]
 }

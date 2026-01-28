@@ -1,5 +1,5 @@
-{{#if value}}
-    <img src='{{imageSource}}' />
+{{#if hasSignature}}
+    <span class="text-success">✓ {{translate 'Signed' scope='Global'}}</span>
 {{else}}
-    {{translate 'None'}}
+    <span class="text-muted">{{translate 'None'}}</span>
 {{/if}}

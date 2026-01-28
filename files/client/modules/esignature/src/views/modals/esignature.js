@@ -12,14 +12,13 @@ Espo.define('esignature:views/modals/esignature', 'views/modal', function (Dep) 
             this.fieldName = this.options.fieldName;
 
             this.headerText = this.translate('signHere', 'messages', 'Global') || 'Hier unterschreiben';
-            console.log(this.translate('Clear', 'messages', 'Global'));
+            
             this.buttonList = [
                 {name: 'save', label: this.translate('Save') || 'Speichern', style: 'primary'},
                 {name: 'clear', label: this.translate('clear', 'messages', 'Global') || 'Löschen'},
                 {name: 'cancel', label: this.translate('Cancel') || 'Abbrechen'}
             ];
-
-            
+            console.log(this);
         },
 
         afterRender: function () {
@@ -34,7 +33,6 @@ Espo.define('esignature:views/modals/esignature', 'views/modal', function (Dep) 
 
                 var hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
-                // Mobile-ähnlich, wenn Touch + (kleine Breite ODER kleine Höhe)
                 return hasTouch && (w < 900 || h < 500);
             };
 
@@ -45,22 +43,18 @@ Espo.define('esignature:views/modals/esignature', 'views/modal', function (Dep) 
                     .toggleClass('is-full', isFull)
                     .toggleClass('is-desktop', !isFull);
 
-    
                 var $body = this.$el.closest('.modal-body');
                 var bodyH = $body.length ? $body.height() : this.$el.height();
 
-                // Fallback
                 if (!bodyH) bodyH = (window.visualViewport ? window.visualViewport.height : window.innerHeight) || 500;
 
                 var h;
                 if (isFull) {
-                    // Fullscreen: so viel wie möglich nutzen (Buttons sind in modal-footer)
                     h = bodyH;
                 } else {
-                    // Desktop: begrenzen
                     var vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight) || 800;
-                    var maxH = Math.floor(vh * 0.40);           // 40% viewport
-                    h = Math.min(bodyH, Math.max(260, maxH));   // min 260, gedeckelt
+                    var maxH = Math.floor(vh * 0.40);
+                    h = Math.min(bodyH, Math.max(260, maxH));
                 }
 
                 $sig.css({
@@ -88,7 +82,6 @@ Espo.define('esignature:views/modals/esignature', 'views/modal', function (Dep) 
 
                     this.$sig = $sig;
 
-                    // ✅ Resize + OrientationChange abdecken
                     this._onResizeEsign = function () {
                         setPadHeight();
                         try { $sig.jSignature('destroy'); } catch (e) {}
@@ -105,7 +98,6 @@ Espo.define('esignature:views/modals/esignature', 'views/modal', function (Dep) 
                     window.addEventListener('resize', this._onResizeEsign);
                     window.addEventListener('orientationchange', this._onResizeEsign);
 
-                    // optional: iOS Safari reagiert oft besser auf visualViewport
                     if (window.visualViewport) {
                         window.visualViewport.addEventListener('resize', this._onResizeEsign);
                     }
@@ -114,32 +106,42 @@ Espo.define('esignature:views/modals/esignature', 'views/modal', function (Dep) 
             }.bind(this));
         },
 
-
-
-
         actionClear: function () {
             if (this.$sig) this.$sig.jSignature('reset');
         },
 
         actionSave: function () {
+            // Stroke-Daten aus jSignature holen
             const strokes = this.$sig.jSignature('getData', 'native');
-            if (!strokes.length) {
+            
+            if (!strokes || strokes.length === 0) {
                 alert(this.translate('noSignatureEntered', 'messages', 'Global'));
                 return;
             }
 
+            // Timestamp erstellen
             var d = new Date();
             var timestamp = eSignatureISODateString(d);
-            var translatedLabel = this.translate('electronicallySignedOn', 'messages', 'Global');
 
-            var imageSource =
-                '<img class="eSignature-img" src="' + this.$sig.jSignature('getData') + '"/>' +
-                '<div style="color:black;margin-top:-0.5em;margin-left:0.5em;font-size:1em;font-style:italic;">' +
-                translatedLabel + ' ' + timestamp +
-                '</div>';
+            // Canvas-Dimensionen speichern
+            var canvas = this.$sig.find('canvas')[0];
+            var width = canvas ? canvas.width : 600;
+            var height = canvas ? canvas.height : 200;
 
-            // done callback: Modal erst schließen, wenn Speichern durch ist
-            this.trigger('esignature:commit', imageSource, function (ok, message) {
+            // Signature-Daten-Objekt erstellen
+            var signatureData = {
+                strokes: strokes,
+                timestamp: timestamp,
+                width: width,
+                height: height,
+                color: 'rgb(5, 1, 135)',
+                lineWidth: 2
+            };
+
+            console.log('Saving signature data:', signatureData);
+
+            // Callback: Modal erst schließen, wenn Speichern durch ist
+            this.trigger('esignature:commit', signatureData, function (ok, message) {
                 if (ok) {
                     this.closeSafe_();
                 } else {
