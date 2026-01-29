@@ -139,7 +139,7 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
 
             if (signatureData) {
                 // Legacy oder neue Strokes
-                hasSignature = signatureData.isLegacy || 
+                hasSignature = signatureData.isLegacy ||
                               (signatureData.strokes && signatureData.strokes.length > 0);
             }
 
@@ -310,11 +310,11 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                     this.listenToOnce(view, 'esignature:commit', function (signatureData, done) {
                         // Unterschrift als JSON-String setzen
                         this.model.set(this.name, JSON.stringify(signatureData));
-                        
+
                         // Modal schließen
                         done && done(true);
                         this.lockOtherFields_(this);
-                        
+
                     }, this);
                 },
                 this
@@ -326,12 +326,86 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
             if (!$form.length) return;
 
             $form.find('input, select, textarea, button').each(function () {
-                const $el = $(this); 
+                const $el = $(this);
                 // - Action-Buttons (z. B. Speichern/Abbrechen)
                 if ($el.closest(ctx.$el).length) return;
                 if ($el.hasClass('action')) return;
                 $el.attr('disabled', 'disabled');
             });
         },
+
+        /**
+         * Validation: required Signatur muss vorhanden sein
+         * - Prüft gespeicherten Wert (JSON / Legacy)
+         * - Optional: falls im Edit-Mode ein Signature-Pad existiert, prüft Strokes
+         *
+         * Rückgabe:
+         * - true  => Fehler (blockiert Speichern)
+         * - false => ok
+         */
+        validate: function () {
+            var isRequired =
+                this.model.getFieldParam(this.name, 'required') ||
+                this.params.required === true;
+
+            if (!isRequired) return false;
+
+            // 1) Bereits gespeicherter Wert?
+            var raw = this.model.get(this.name);
+            var hasSavedValue = !!raw;
+
+            // Legacy (<img ...>) zählt als vorhanden
+            if (hasSavedValue && typeof raw === 'string' && raw.indexOf('<img') !== -1) {
+                return false;
+            }
+
+            // JSON-Strokes zählen als vorhanden
+            if (hasSavedValue) {
+                try {
+                    var parsed = (typeof raw === 'string') ? JSON.parse(raw) : raw;
+                    if (parsed && parsed.strokes && parsed.strokes.length > 0) {
+                        return false;
+                    }
+                } catch (e) {
+                    // wenn kaputtes JSON, dann nicht als gültig werten
+                }
+            }
+
+            // 2) Optional: Wenn im Edit-Mode irgendwo ein aktives jSignature-Pad hängt
+            // (z.B. wenn du es inline rendern würdest). In deinem aktuellen Flow ist
+            // die Signatur im Modal, daher kann dieser Teil meist false bleiben.
+            var hasStrokes = false;
+            try {
+                if (this.isEditMode && this.isEditMode()) {
+                    // Suche nach jSignature-Canvas innerhalb des Feldes
+                    var $canvas = this.$el.find('canvas.jSignature');
+                    if ($canvas.length) {
+                        var $pad = $canvas.closest('[data-signature-pad], .jSignature, .esignature-pad, .signature-pad').first();
+                        if ($pad.length && typeof $pad.jSignature === 'function') {
+                            var strokes = $pad.jSignature('getData', 'native') || [];
+                            hasStrokes = strokes && strokes.length > 0;
+                        }
+                    }
+                }
+            } catch (e) {}
+
+            if (!hasSavedValue && !hasStrokes) {
+                var label =
+                    (this.getLanguage && this.getLanguage().translate(this.name, 'fields', this.model.name)) ||
+                    this.params.label || this.name;
+
+                var msg =
+                    (this.getLanguage && this.getLanguage().translate('fieldIsRequired', 'messages', 'Global')) ||
+                    '{field} wird benötigt';
+
+                msg = msg.replace(/\{field\}/g, label);
+
+                this.showValidationMessage(msg);
+                return true; // blockiert Speichern
+            }
+
+            return false;
+        }
+
     });
 });
