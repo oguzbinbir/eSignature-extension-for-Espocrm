@@ -6,18 +6,21 @@
       <div class="esignature-timestamp" style="color:#666;margin-top:0.5em;font-size:0.9em;font-style:italic;"></div>
     </div>
   {{else}}
-    <div class="esignature-empty text-muted" style="margin-bottom: 8px;">
-      {{translate 'signHere' category='messages' scope='Global'}}
-    </div>
+    {{#if canSign}}
+      <div class="esignature-empty text-muted" style="margin-bottom: 8px;">
+        {{translate 'signHere' category='messages' scope='Global'}}
+      </div>
 
-    <button
-      type="button"
-      class="btn btn-primary btn-sm"
-      data-action="openSignature"
-      {{#if disabled}}disabled{{/if}}
-    >
-      {{translate 'signHere' category='messages' scope='Global'}}
-    </button>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        data-action="openSignature"
+      >
+        {{translate 'signHere' category='messages' scope='Global'}}
+      </button>
+    {{else}}
+      <span class="none-value">{{translate 'None'}}</span>
+    {{/if}}
   {{/if}}
 
 </div>

@@ -150,8 +150,30 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 params: this.params,
                 value: this.model.get(this.name),
                 hasSignature: hasSignature,
-                signatureData: signatureData
+                signatureData: signatureData,
+                canSign: this.canSign_()
             };
+        },
+
+        /**
+         * Darf in der aktuellen Ansicht unterschrieben werden?
+         * - Edit-Modus: ja (gespeichert wird über "Speichern" des Datensatzes)
+         * - Detail-Modus: wie Espo-Inline-Edit -> abhängig von "Inline-Bearbeitung deaktivieren",
+         *   Schreibschutz und Bearbeitungsrechten; gespeichert wird sofort
+         */
+        canSign_: function () {
+            if (this.disabled) return false;
+            if (this.isEditMode()) return true;
+
+            if (this.params.inlineEditDisabled) return false;
+            if (this.readOnly || this.model.getFieldParam(this.name, 'readOnly')) return false;
+            if (!this.model.id) return false;
+
+            var acl = this.getAcl();
+            if (!acl.checkModel(this.model, 'edit')) return false;
+            if (acl.getScopeForbiddenFieldList(this.model.name, 'edit').indexOf(this.name) !== -1) return false;
+
+            return true;
         },
 
         getTemplate: function () {
@@ -324,7 +346,7 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
         },
 
         openEsignatureModal: function () {
-            if (this.disabled) return;
+            if (!this.canSign_()) return;
 
             this.createView(
                 'esignatureModal',
@@ -336,18 +358,45 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 function (view) {
                     view.render();
 
-                    // Commit: Signatur setzen, Felder sperren, Modal schließen
-                    this.listenToOnce(view, 'esignature:commit', function (signatureData, done) {
-                        // Unterschrift als JSON-String setzen
-                        this.model.set(this.name, JSON.stringify(signatureData));
+                    // Commit: Signatur setzen (Edit-Modus) bzw. direkt speichern (Detail-Modus)
+                    this.listenTo(view, 'esignature:commit', function (signatureData, done) {
+                        var value = JSON.stringify(signatureData);
 
-                        // Modal schließen
-                        done && done(true);
-                        this.lockOtherFields_(this);
+                        if (this.isEditMode()) {
+                            // Gespeichert wird später über "Speichern" des Datensatzes
+                            this.model.set(this.name, value);
+                            done && done(true);
+                            this.lockOtherFields_(this);
+                            return;
+                        }
 
+                        this.saveSignature_(value, done);
                     }, this);
                 },
                 this
+            );
+        },
+
+        /**
+         * Detail-Modus: nur das Signaturfeld sofort speichern (wie Espo-Inline-Edit)
+         */
+        saveSignature_: function (value, done) {
+            var previousValue = this.model.get(this.name);
+            var attributes = {};
+            attributes[this.name] = value;
+
+            this.notify('Saving...');
+
+            this.model.save(attributes, { patch: true }).then(
+                function () {
+                    this.notify('Saved', 'success');
+                    done && done(true);
+                }.bind(this),
+                function () {
+                    this.notify(false);
+                    this.model.set(this.name, previousValue);
+                    done && done(false, this.translate('Error'));
+                }.bind(this)
             );
         },
 
