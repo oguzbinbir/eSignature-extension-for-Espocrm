@@ -170,6 +170,11 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
 
             // Prüfe ob es alte Image-Daten sind (HTML mit <img>)
             if (typeof raw === 'string' && raw.indexOf('<img') !== -1) {
+                // In Listen kürzt EspoCRM lange Texte serverseitig -> vollständig nachladen
+                if (!/>\s*$/.test(raw)) {
+                    this.loadFullValue_();
+                    return null;
+                }
                 return {
                     isLegacy: true,
                     html: raw
@@ -186,10 +191,35 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                     };
                 }
             } catch (e) {
-                console.error('Error parsing signature data:', e);
+                // Kaputtes JSON = in der Regel vom Server gekürzter Wert (Listenansicht)
+                this.loadFullValue_();
             }
 
             return null;
+        },
+
+        /**
+         * EspoCRM kürzt Text-Attribute in Listen-Requests (maxSelectTextAttributeLength).
+         * Lädt den Datensatz einmalig vollständig nach und rendert das Feld neu.
+         */
+        loadFullValue_: function () {
+            if (this._fullValueRequested || !this.model.id) return;
+            this._fullValueRequested = true;
+
+            var url = this.model.name + '/' + this.model.id;
+            var request = (typeof Espo.Ajax !== 'undefined')
+                ? Espo.Ajax.getRequest(url)
+                : this.ajaxGetRequest(url);
+
+            request.then(function (response) {
+                if (!response || !(this.name in response)) return;
+
+                this.model.set(this.name, response[this.name], { silent: true });
+
+                if (this.isRendered()) {
+                    this.reRender();
+                }
+            }.bind(this));
         },
 
         /**

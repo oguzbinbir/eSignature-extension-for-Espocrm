@@ -205,7 +205,12 @@ Espo.define('esignature:views/modals/esignature', 'views/modal', function (Dep) 
         },
 
         actionSave: function () {
-            const strokes = this.$sig.jSignature('getData', 'native');
+            var round = function (v) { return Math.round(v * 10) / 10; };
+
+            // Koordinaten auf 1 Nachkommastelle runden -> deutlich kleineres JSON
+            const strokes = (this.$sig.jSignature('getData', 'native') || []).map(function (s) {
+                return { x: s.x.map(round), y: s.y.map(round) };
+            });
 
             if (!strokes || strokes.length === 0) {
                 alert(this.translate('noSignatureEntered', 'messages', 'Global'));
@@ -227,8 +232,6 @@ Espo.define('esignature:views/modals/esignature', 'views/modal', function (Dep) 
                 color: 'rgb(5, 1, 135)',
                 lineWidth: 2
             };
-
-            console.log('Saving signature data:', signatureData);
 
             this.trigger('esignature:commit', signatureData, function (ok, message) {
                 if (ok) {
