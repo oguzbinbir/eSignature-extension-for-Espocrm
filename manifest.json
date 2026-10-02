@@ -1,10 +1,10 @@
 {
     "name": "eSignature Documents for EspoCRM",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "acceptableVersions": [
         ">=5.7.8"
     ],
-    "releaseDate": "2026-09-30",
+    "releaseDate": "2026-10-02",
     "author": "(Edited by lithiuhm) Omar A Gonsenheim ",
     "description": "Electronic signature field and functionality to generate documents that can be signed electronically"
 }
