@@ -3,4 +3,3 @@
 
 # Built extension packages (attach to GitHub releases instead)
 *.zip
-!/beta.zip
