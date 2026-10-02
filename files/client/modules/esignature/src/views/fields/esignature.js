@@ -76,13 +76,15 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
             this.disabled = this.disabledLocked || this.options.disabled || this.disabled;
 
             this.on('invalid', function () {
-                var $cell = this.getCellElement();
-                $cell.addClass('has-error');
+                var cell = this.getCellNode_();
+                if (!cell) return;
+
+                cell.classList.add('has-error');
                 this.$el.one('click', function () {
-                    $cell.removeClass('has-error');
+                    cell.classList.remove('has-error');
                 });
                 this.once('render', function () {
-                    $cell.removeClass('has-error');
+                    cell.classList.remove('has-error');
                 });
             }, this);
 
@@ -95,16 +97,18 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                     this.model.getFieldParam(this.name, 'required') ||
                     this.params.required === true;
 
-                var $cell = this.getCellElement && this.getCellElement();
-                if (!$cell) return;
+                var cell = this.getCellNode_();
+                if (!cell) return;
 
-                var $labelText = $cell.find('label .label-text');
-                if (!$labelText.length) return;
+                var labelText = cell.querySelector('label .label-text');
+                if (!labelText) return;
 
-                $labelText.find('.required-sign').remove();
+                labelText.querySelectorAll('.required-sign').forEach(function (el) {
+                    el.remove();
+                });
 
                 if (isRequired) {
-                    $labelText.append(' <span class="required-sign"> *</span>');
+                    labelText.insertAdjacentHTML('beforeend', ' <span class="required-sign"> *</span>');
                 }
             }, this);
 
@@ -131,6 +135,16 @@ Espo.define('esignature:views/fields/esignature', 'views/fields/base', function 
                 var attributes = this.fetch();
                 this.model.set(attributes, { ui: true });
             });
+        },
+
+        /**
+         * Zelle des Feldes als natives DOM-Element.
+         * Espo < 9.2 liefert ein jQuery-Objekt, ab 9.2 ein DOM-Element.
+         */
+        getCellNode_: function () {
+            var cell = this.getCellElement && this.getCellElement();
+            if (cell && cell.jquery) cell = cell[0];
+            return cell || null;
         },
 
         data: function () {
